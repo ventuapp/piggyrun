@@ -5,6 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Piggy Run</title>
     <link rel="stylesheet" href="styles.css">
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#7cba3d" />
+    <!-- Add iOS meta tags and icons -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black" />
+    <meta name="apple-mobile-web-app-title" content="Piggy Run" />
+    <link rel="apple-touch-icon" href="/icons/icon-192x192.png" />
 </head>
 <body>
     <div id="root">  </div>
@@ -30,5 +37,20 @@
      border-top-left-radius: 12px; z-index: 10000; border: 1px solid #fff;">🕹️ Vibe Jam 2025</a>
 
     <script type="module" src="/src/main.tsx"></script>
+    <script>
+      // Register service worker
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker
+            .register('/sw.js')
+            .then((registration) => {
+              console.log('ServiceWorker registration successful');
+            })
+            .catch((err) => {
+              console.log('ServiceWorker registration failed: ', err);
+            });
+        });
+      }
+    </script>
 </body>
 </html>
