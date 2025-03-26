@@ -6,7 +6,7 @@
      <!-- Add CSP meta tag -->
      <meta http-equiv="Content-Security-Policy" content="
      default-src 'self' https://games.ventu.cc;
-     script-src 'self' 'unsafe-eval' 'unsafe-inline' https://games.ventu.cc;
+     script-src 'self' 'unsafe-eval' 'unsafe-inline' https://games.ventu.cc https://unpkg.com;
      style-src 'self' 'unsafe-inline' https://games.ventu.cc;
      img-src 'self' data: blob: https://games.ventu.cc;
      connect-src 'self' https://games.ventu.cc https://geoip.pieter.com;
@@ -20,7 +20,7 @@
      form-action 'self' https://games.ventu.cc;
      upgrade-insecure-requests;
    ">
-   <!-- Add report-only CSP for testing -->
+   <!-- Add report-only CSP for testing
    <meta http-equiv="Content-Security-Policy-Report-Only" content="
    default-src 'self' https://games.ventu.cc;
    script-src 'self' 'unsafe-eval' 'unsafe-inline' https://games.ventu.cc;
@@ -38,6 +38,7 @@
    upgrade-insecure-requests;
    report-uri https://games.ventu.cc/csp-report;
  ">
+-->
 
     <title>Piggy Run</title>
     <meta name="description" content="Help the cute pig collect vegetables while avoiding witches and dodgy food in this cringy 3D running game!">
