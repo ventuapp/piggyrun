@@ -2,11 +2,11 @@ import * as THREE from 'three';
 
 import { createPig } from './pig';
 import { createCarrot, createTurnip, createCabbage } from './food';
+import { createWitch } from './witch';
 
-const SPAWN_POINT_X = -30;
-const SPAWN_POINT_Y = -200;
-const SPAWN_POINT_Z = 20;
-
+const SPAWN_POINT_X = 30;
+const SPAWN_POINT_Y = 20;
+const SPAWN_POINT_Z = -400;
 
 class PiggyRun {
     constructor() {
@@ -20,14 +20,52 @@ class PiggyRun {
         this.paused = false;
         this.startPortalBox = null;
         this.exitPortalBox = null;
-        this.selfUsername = new URLSearchParams(window.location.search).get('username') || 'MrSmellyPants';
+        this.introPlayed = false;
+        this.selfUsername = new URLSearchParams(window.location.search).get('username') || 'Choose a Username';
         this.currentSpeed = new URLSearchParams(window.location.search).get('speed') || '0.1';
+        this.colour = new URLSearchParams(window.location.search).get('color') || 'white';
+        this.pigdata = null;
+        this.user_uid = null;
+        this.geoData = null;
+
+        // extra params
+       this.avatar_url = new URLSearchParams(window.location.search).get('avatar_url') || '';
+       this.team = new URLSearchParams(window.location.search).get('team') || '';
+       this.speed_x = new URLSearchParams(window.location.search).get('speed_x') || '0.1';
+       this.speed_y = new URLSearchParams(window.location.search).get('speed_y') || '0.1';
+       this.speed_z = new URLSearchParams(window.location.search).get('speed_z') || '0.1';
+       this.rotation_x = new URLSearchParams(window.location.search).get('rotation_x') || '0';
+       this.rotation_y = new URLSearchParams(window.location.search).get('rotation_y') || '0';
+       this.rotation_z = new URLSearchParams(window.location.search).get('rotation_z') || '0';
+
+        // Add touch handling properties
+        this.touchStartX = 0;
+        this.touchStartY = 0;
+        this.touchEndX = 0;
+        this.touchEndY = 0;
+        this.minSwipeDistance = 50; // Minimum pixel distance for a swipe
+
+        // Add tap handling properties
+        this.tapTimeout = 200; // Maximum ms for a tap
+        this.tapStartTime = 0;
+        this.hasMoved = false;
+        this.screenCenterX = window.innerWidth / 2;
+        this.screenCenterY = window.innerHeight / 2;
+
+        // Add GeoIP request
+        this.fetchGeoIP().then(geoData => {
+            this.geoData = geoData;
+            console.log('GeoIP data:', geoData);
+        }).catch(error => {
+            console.warn('Failed to fetch GeoIP data:', error);
+        });
 
         ///////
         this.init();
         this.createEnvironment();
         this.createPig();
         this.createFood();
+        this.createWitch();
         this.setupEventListeners();
         this.animate();
         ///////
@@ -41,6 +79,27 @@ class PiggyRun {
             }, 3000);
         }
 
+        let pigdata = localStorage.getItem('piggyrun_data');
+        if (pigdata) {
+            this.pigdata = JSON.parse(pigdata);
+        } else {
+            let uid = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+            this.pigdata = {
+                uid: uid,
+                score: 0,
+                colour: this.colour,
+                avatar_url: this.avatar_url,
+                team: this.team,
+
+            };
+            localStorage.setItem('piggyrun_data', JSON.stringify(this.pigdata));
+        }
+
+        this.user_uid = this.pigdata.uid;
+
+        if (this.isMobileDevice()) {
+            this.addMobileControlsOverlay();
+        }
     }
 
     init() {
@@ -119,16 +178,35 @@ class PiggyRun {
             this.foodScores.push({
                 food: food,
                 score: Math.round(10 + Math.abs(xpos)),
-                isWitch: Math.random() > 0.8,
-                isBad: Math.round(Math.random() * 100) % 6 === 0
+                isWitch: z < -500 && Math.random() > 0.8,
+                isBad: z < -500 && Math.round(Math.random() * 100) % 6 === 0
             });
         }
-        //console.log("foodScores", this.foodScores);
+        console.log("foodScores", this.foodScores);
+    }
+
+    createWitch() {
+        const witch = createWitch();
+        witch.position.set(30, 30, -50); // Adjust position as needed
+        this.scene.add(witch);
+        this.witch = witch;
+        this.witch.visible = false;
+    }
+
+    playIntro() {
+        if (!this.introPlayed) {
+            var audio = new Audio('./audio/piggy_run.mp3');
+            audio.play();
+            this.introPlayed = true;
+        }
     }
 
     setupEventListeners() {
         document.addEventListener('keydown', (e) => {
             console.log("keydown", e.key);
+
+            this.playIntro();
+
             switch (e.key) {
                 case 'ArrowLeft':
                     if (this.pig.position.x > -15) {
@@ -145,6 +223,7 @@ class PiggyRun {
                     }
                     break;
                 case 'ArrowUp':
+
                     this.pig.position.y += 0.5;
                     break;
                 case 'ArrowDown':
@@ -165,11 +244,207 @@ class PiggyRun {
             }
         });
 
+        // Update tap detection in touch handlers
+        document.addEventListener('touchstart', (e) => {
+            this.handleTouchStart(e);
+            this.tapStartTime = Date.now();
+            this.hasMoved = false;
+        }, false);
+
+        document.addEventListener('touchmove', (e) => {
+            this.handleTouchMove(e);
+            this.hasMoved = true;
+        }, false);
+
+        document.addEventListener('touchend', (e) => {
+            this.handleTouchEnd(e);
+            this.handlePossibleTap(e);
+        }, false);
+
+        // Update screen center on resize
         window.addEventListener('resize', () => {
+            this.screenCenterX = window.innerWidth / 2;
+            this.screenCenterY = window.innerHeight / 2;
             this.camera.aspect = window.innerWidth / window.innerHeight;
             this.camera.updateProjectionMatrix();
             this.renderer.setSize(window.innerWidth, window.innerHeight);
         });
+    }
+
+    handleTouchStart(event) {
+        const touch = event.touches[0];
+        this.touchStartX = touch.clientX;
+        this.touchStartY = touch.clientY;
+        this.touchEndX = touch.clientX; // Initialize end position
+        this.touchEndY = touch.clientY;
+    }
+
+    handleTouchMove(event) {
+        // Prevent scrolling while swiping
+        event.preventDefault();
+
+        const touch = event.touches[0];
+        this.touchEndX = touch.clientX;
+        this.touchEndY = touch.clientY;
+
+        // Calculate swipe distance
+        const deltaX = this.touchEndX - this.touchStartX;
+        const deltaY = this.touchEndY - this.touchStartY;
+
+        // Reduce movement multiplier from 0.01 to 0.005
+        if (Math.abs(deltaX) > Math.abs(deltaY)) {
+            // Horizontal swipe
+            if (deltaX > 0 && this.pig.position.x < 15) {
+                // Right swipe
+                this.pig.position.x = Math.min(15, this.pig.position.x + (deltaX * 0.0005));
+                this.camera.position.x = this.pig.position.x;
+                this.camera.lookAt(this.pig.position);
+            } else if (deltaX < 0 && this.pig.position.x > -15) {
+                // Left swipe
+                this.pig.position.x = Math.max(-15, this.pig.position.x + (deltaX * 0.0005));
+                this.camera.position.x = this.pig.position.x;
+                this.camera.lookAt(this.pig.position);
+            }
+        }
+    }
+
+    handleTouchEnd(event) {
+        const deltaX = this.touchEndX - this.touchStartX;
+        const deltaY = this.touchEndY - this.touchStartY;
+        const deltaTime = event.timeStamp - this.touchStartTime;
+
+        // Check if it's a quick swipe
+        const isQuickSwipe = deltaTime < 300;
+
+        // Only process swipe if minimum distance is met
+        if (Math.abs(deltaX) > this.minSwipeDistance || Math.abs(deltaY) > this.minSwipeDistance) {
+            this.playIntro(); // Play sound if it hasn't been played yet
+
+            if (Math.abs(deltaX) > Math.abs(deltaY)) {
+                // Horizontal swipe
+                if (deltaX > 0 && this.pig.position.x < 15) {
+                    // Right swipe - move right with momentum
+                    this.addMomentum('right', isQuickSwipe);
+                } else if (deltaX < 0 && this.pig.position.x > -15) {
+                    // Left swipe - move left with momentum
+                    this.addMomentum('left', isQuickSwipe);
+                }
+            } else {
+                // Vertical swipe
+                if (deltaY > 0 && this.pig.position.y > 0) {
+                    // Down swipe
+                    this.pig.position.y = Math.max(0, this.pig.position.y - 0.5);
+                } else if (deltaY < 0) {
+                    // Up swipe - jump
+                    this.pig.position.y += 0.5;
+                }
+            }
+        }
+    }
+
+    handlePossibleTap(event) {
+        // Check if it was a tap (quick touch without movement)
+        const touchDuration = Date.now() - this.tapStartTime;
+        if (touchDuration < this.tapTimeout && !this.hasMoved) {
+            const touch = event.changedTouches[0];
+            this.handleTap(touch.clientX, touch.clientY);
+        }
+    }
+
+    handleTap(x, y) {
+        // Show visual feedback
+        this.showTouchFeedback(x, y);
+
+        // Calculate tap position relative to screen center
+        const relativeX = x - this.screenCenterX;
+        const relativeY = y - this.screenCenterY;
+
+        // Determine which third of the screen was tapped
+        const screenThirdX = window.innerWidth / 3;
+        const screenThirdY = window.innerHeight / 3;
+
+        // Movement amounts
+        const horizontalMove = 0.5;
+        const verticalMove = 0.5;
+
+        // Handle horizontal movement
+        if (x < screenThirdX) {
+            // Left third of screen
+            if (this.pig.position.x > -15) {
+                this.addMomentum('left', true);
+            }
+        } else if (x > screenThirdX * 2) {
+            // Right third of screen
+            if (this.pig.position.x < 15) {
+                this.addMomentum('right', true);
+            }
+        }
+
+        // Handle vertical movement
+        if (y < screenThirdY) {
+            // Top third of screen - Jump
+            this.pig.position.y += verticalMove;
+        } else if (y > screenThirdY * 2 && this.pig.position.y > 0) {
+            // Bottom third of screen - Move down
+            this.pig.position.y = Math.max(0, this.pig.position.y - verticalMove);
+        }
+
+        // Show movement indicator
+        this.showMovementIndicator(x, y);
+    }
+
+    showTouchFeedback(x, y) {
+        const feedback = document.createElement('div');
+        feedback.style.cssText = `
+            position: fixed;
+            width: 20px;
+            height: 20px;
+            background: rgba(255, 255, 255, 0.5);
+            border-radius: 50%;
+            pointer-events: none;
+            transform: translate(-50%, -50%);
+            z-index: 1000;
+        `;
+        feedback.style.left = x + 'px';
+        feedback.style.top = y + 'px';
+        document.body.appendChild(feedback);
+
+        // Animate and remove
+        feedback.animate([
+            { opacity: 0.5, transform: 'translate(-50%, -50%) scale(1)' },
+            { opacity: 0, transform: 'translate(-50%, -50%) scale(2)' }
+        ], {
+            duration: 300,
+            easing: 'ease-out'
+        }).onfinish = () => feedback.remove();
+    }
+
+    showMovementIndicator(x, y) {
+        const indicator = document.createElement('div');
+        indicator.style.cssText = `
+            position: fixed;
+            width: 40px;
+            height: 40px;
+            pointer-events: none;
+            z-index: 1000;
+            border: 2px solid white;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            opacity: 0.6;
+            box-shadow: 0 0 10px rgba(255,255,255,0.5);
+        `;
+        indicator.style.left = x + 'px';
+        indicator.style.top = y + 'px';
+        document.body.appendChild(indicator);
+
+        // Animate and remove
+        indicator.animate([
+            { transform: 'translate(-50%, -50%) scale(0.5)', opacity: 0.6 },
+            { transform: 'translate(-50%, -50%) scale(1.5)', opacity: 0 }
+        ], {
+            duration: 400,
+            easing: 'ease-out'
+        }).onfinish = () => indicator.remove();
     }
 
     showGameMessage(message) {
@@ -198,6 +473,14 @@ class PiggyRun {
                 } else if (this.foodScores[index].isWitch) {
                     this.showGameMessage("A witch caught you! You lost 50% of your score!");
                     this.score -= Math.round(this.score / 2);
+                    this.witch.position.set(food.position.x, food.position.y, food.position.z);
+                    this.witch.visible = true;
+                    this.paused = true;
+
+                    setTimeout(() => {
+                        this.paused = false;
+                        this.witch.visible = false;
+                    }, 3000);
                 }
 
                 let scoreElement = document.getElementById('score-value');
@@ -222,14 +505,39 @@ class PiggyRun {
         if (finalScoreElement) {
             finalScoreElement.textContent = this.score;
         }
+
+        let formScoreElement = document.getElementById('form-score');
+        if (formScoreElement) {
+            formScoreElement.value = this.score;
+        }
+
+        let userUidElement = document.getElementById('user-uid');
+        if (userUidElement) {
+            userUidElement.value = this.user_uid;
+        }
+
+        let formGameNameElement = document.getElementById('username');
+        if (formGameNameElement) {
+            formGameNameElement.value = this.selfUsername;
+        }
+
+        // show the game over screen
         let scoreElement = document.getElementById('game-over-screen');
         if (scoreElement) {
             scoreElement.style.display = 'block';
         }
+
     }
     animate() {
         if (!this.isGameOver && !this.paused) {
             requestAnimationFrame(this.animate.bind(this));
+
+            let time = performance.now();
+            // Show/hide wings based on height
+            if (this.pig.wings) {
+                this.pig.wings.visible = this.pig.position.y > 0;
+                this.pig.wings.animate(time);
+            }
 
             // Move pig forward
             this.pig.position.z -= this.speed;
@@ -241,8 +549,13 @@ class PiggyRun {
 
             this.checkCollisions();
 
-            let time = performance.now();
+            // The animate function now handles both legs and wings
             this.animateLegs(time);
+
+            // Animate witch
+            if (this.witch) {
+                this.witch.animate();
+            }
 
             // Check if game is complete
             if (this.pig.position.z < -900) {
@@ -257,14 +570,16 @@ class PiggyRun {
     }
 
     createStartPortal(scene) {
-
-        if (new URLSearchParams(window.location.search).get('portal')) {
+        //  if (new URLSearchParams(window.location.search).get('portal') ) {
+        if (1 > 0 ) {
             // <create start portal>
             // Create portal group to contain all portal elements
             const startPortalGroup = new THREE.Group();
             startPortalGroup.position.set(SPAWN_POINT_X, SPAWN_POINT_Y, SPAWN_POINT_Z);
             startPortalGroup.rotation.x = 0.35;
             startPortalGroup.rotation.y = 0;
+
+            console.log("startPortalGroup", startPortalGroup);
 
             // Create portal effect
             const startPortalGeometry = new THREE.TorusGeometry(15, 2, 16, 100);
@@ -341,6 +656,7 @@ class PiggyRun {
 
                 requestAnimationFrame(animateStartPortal);
             }
+            console.log("animateStartPortal");
             animateStartPortal();
             // </create start portal>
         }
@@ -354,6 +670,8 @@ class PiggyRun {
         exitPortalGroup.position.set(-20, 20, -300);
         exitPortalGroup.rotation.x = 0.35;
         exitPortalGroup.rotation.y = 0;
+
+        console.log("exitPortalGroup", exitPortalGroup);
 
         // Create portal effect
         const exitPortalGeometry = new THREE.TorusGeometry(15, 2, 16, 100);
@@ -508,7 +826,7 @@ class PiggyRun {
                 const newParams = new URLSearchParams();
                 newParams.append('portal', "true");
                 newParams.append('username', this.selfUsername);
-                newParams.append('color', 'white');
+                newParams.append('color',this.colour);
                 newParams.append('speed', this.currentSpeed);
 
                 for (const [key, value] of currentParams) {
@@ -541,6 +859,105 @@ class PiggyRun {
         this.createStartPortal(scene);
 
         this.createExitPortal(scene);
+    }
+
+    async fetchGeoIP() {
+        try {
+            const response = await fetch('https://geoip.pieter.com', {
+                method: 'GET',
+                headers: {
+                    'Accept': 'application/json',
+                },
+                credentials: 'omit' // Don't send cookies
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const data = await response.json();
+            return data;
+        } catch (error) {
+            console.warn('GeoIP request failed:', error);
+            return null;
+        }
+    }
+
+    // Add helper method to check if device is mobile
+    isMobileDevice() {
+        return ('ontouchstart' in window) ||
+            (navigator.maxTouchPoints > 0) ||
+            (navigator.msMaxTouchPoints > 0);
+    }
+
+    // Add mobile controls overlay (optional)
+    addMobileControlsOverlay() {
+        if (!this.isMobileDevice()) return;
+
+        const overlay = document.createElement('div');
+        overlay.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 100;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            grid-template-rows: repeat(3, 1fr);
+            opacity: 0.3;
+        `;
+
+        // Add grid lines for visual reference (optional, can be removed in production)
+        const gridColors = ['rgba(255,255,255,0.1)', 'rgba(255,255,255,0.05)'];
+        for (let i = 0; i < 9; i++) {
+            const cell = document.createElement('div');
+            cell.style.cssText = `
+                border: 1px solid ${gridColors[i % 2]};
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                color: rgba(255,255,255,0.3);
+                font-size: 12px;
+            `;
+            overlay.appendChild(cell);
+        }
+
+        document.body.appendChild(overlay);
+
+        // Fade out overlay after a few seconds
+        setTimeout(() => {
+            overlay.style.transition = 'opacity 1s';
+            overlay.style.opacity = '0';
+        }, 3000);
+    }
+
+    addMomentum(direction, isQuickSwipe) {
+        // Reduce momentum distance
+        const momentumDistance = isQuickSwipe ? 0.75 : 0.25; // Reduced from 1.5/0.5
+        const momentumSteps = 10;
+        let step = 0;
+
+        const applyMomentum = () => {
+            if (step < momentumSteps) {
+                const movement = (momentumDistance * (momentumSteps - step)) / momentumSteps;
+
+                if (direction === 'right' && this.pig.position.x < 15) {
+                    this.pig.position.x = Math.min(15, this.pig.position.x + movement);
+                    this.camera.position.x = this.pig.position.x;
+                } else if (direction === 'left' && this.pig.position.x > -15) {
+                    this.pig.position.x = Math.max(-15, this.pig.position.x - movement);
+                    this.camera.position.x = this.pig.position.x;
+                }
+
+                this.camera.lookAt(this.pig.position);
+                step++;
+                requestAnimationFrame(applyMomentum);
+            }
+        };
+
+        applyMomentum();
     }
 }
 

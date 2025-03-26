@@ -109,14 +109,105 @@ export function createPig() {
     tail.castShadow = true;
     group.add(tail);
 
-    // Animation function
-    function animate(time) {
-        const legAnimation = time * 0.002;
+    // Add wings to the pig
+    const wings = createWings();
+    wings.position.set(0, 0.5, 0); // Adjust position to match pig's body
+    group.add(wings);
+
+    // Store wings reference for visibility control
+    group.wings = wings;
+
+    // Modify the existing animate function to include wing animation
+    const animate = (time) => {
+        // Existing leg animation
+        const legAnimation = time * 0.02;
         frontLeftLeg.rotation.x = Math.sin(legAnimation) * 0.3;
         frontRightLeg.rotation.x = -Math.sin(legAnimation) * 0.3;
         backLeftLeg.rotation.x = -Math.sin(legAnimation) * 0.3;
         backRightLeg.rotation.x = Math.sin(legAnimation) * 0.3;
+
+        // Wing animation (only when visible)
+        if (wings.visible) {
+            wings.animate(time);
+        }
+    };
+
+    return { group, animate,
+        legs: {fl: frontLeftLeg, fr: frontRightLeg,
+            bl: backLeftLeg, br: backRightLeg} };
+}
+
+function createWings() {
+    const wingsGroup = new THREE.Group();
+
+    // Create a single wing function to avoid duplicate code
+    function createSingleWing(isLeft) {
+        const wingGroup = new THREE.Group();
+
+        // Main wing membrane
+        const wingGeometry = new THREE.BufferGeometry();
+        const points = [
+            new THREE.Vector3(0, 0, 0),
+            new THREE.Vector3(isLeft ? -1.5 : 1.5, 0.5, -0.5),
+            new THREE.Vector3(isLeft ? -0.8 : 0.8, 0.3, -1),
+            new THREE.Vector3(0, 0, -0.8),
+        ];
+
+        const triangles = [
+            0, 1, 2,
+            0, 2, 3
+        ];
+
+        wingGeometry.setFromPoints(points);
+        wingGeometry.setIndex(triangles);
+        wingGeometry.computeVertexNormals();
+
+        const wingMaterial = new THREE.MeshStandardMaterial({
+            color: 0xFFB6C1,  // Light pink
+            side: THREE.DoubleSide,
+            transparent: true,
+            opacity: 0.8
+        });
+
+        const wing = new THREE.Mesh(wingGeometry, wingMaterial);
+
+        // Add "bones" to the wings
+        const boneGeometry = new THREE.CylinderGeometry(0.03, 0.03, 1.5, 8);
+        const boneMaterial = new THREE.MeshStandardMaterial({ color: 0xFFCCCC });
+
+        // Main bone
+        const mainBone = new THREE.Mesh(boneGeometry, boneMaterial);
+        mainBone.rotation.z = isLeft ? Math.PI / 4 : -Math.PI / 4;
+        mainBone.position.x = isLeft ? -0.75 : 0.75;
+        mainBone.position.y = 0.25;
+
+        // Secondary bone
+        const secondaryBone = new THREE.Mesh(boneGeometry, boneMaterial);
+        secondaryBone.scale.set(0.7, 0.7, 0.7);
+        secondaryBone.rotation.z = isLeft ? Math.PI / 3 : -Math.PI / 3;
+        secondaryBone.position.x = isLeft ? -1.2 : 1.2;
+        secondaryBone.position.y = 0.4;
+
+        wingGroup.add(wing, mainBone, secondaryBone);
+        return wingGroup;
     }
 
-    return { group, animate, legs: {fl: frontLeftLeg, fr: frontRightLeg, bl: backLeftLeg, br: backRightLeg} };
+    // Create left and right wings
+    const leftWing = createSingleWing(true);
+    const rightWing = createSingleWing(false);
+
+    wingsGroup.add(leftWing, rightWing);
+
+    // Add wing flapping animation
+    wingsGroup.animate = (time) => {
+        const flapSpeed = 15;
+        const flapAmount = 0.3;
+        leftWing.rotation.z = Math.sin(time * flapSpeed) * flapAmount;
+        rightWing.rotation.z = -Math.sin(time * flapSpeed) * flapAmount;
+    };
+
+    // Initially hide the wings
+    wingsGroup.visible = false;
+
+    return wingsGroup;
 }

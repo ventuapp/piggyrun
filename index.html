@@ -2,16 +2,81 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+     <!-- Add CSP meta tag -->
+     <meta http-equiv="Content-Security-Policy" content="
+     default-src 'self' https://games.ventu.cc;
+     script-src 'self' 'unsafe-eval' 'unsafe-inline' https://games.ventu.cc;
+     style-src 'self' 'unsafe-inline' https://games.ventu.cc;
+     img-src 'self' data: blob: https://games.ventu.cc;
+     connect-src 'self' https://games.ventu.cc https://geoip.pieter.com;
+     font-src 'self' https://games.ventu.cc;
+     media-src 'self' https://games.ventu.cc;
+     worker-src 'self' blob: https://games.ventu.cc;
+     manifest-src 'self' https://games.ventu.cc;
+     frame-src 'self' https://games.ventu.cc https://portal.pieter.com;
+     object-src 'none';
+     base-uri 'self';
+     form-action 'self' https://games.ventu.cc;
+     upgrade-insecure-requests;
+   ">
+   <!-- Add report-only CSP for testing -->
+   <meta http-equiv="Content-Security-Policy-Report-Only" content="
+   default-src 'self' https://games.ventu.cc;
+   script-src 'self' 'unsafe-eval' 'unsafe-inline' https://games.ventu.cc;
+   style-src 'self' 'unsafe-inline' https://games.ventu.cc;
+   img-src 'self' data: blob: https://games.ventu.cc;
+   connect-src 'self' https://games.ventu.cc;
+   font-src 'self' https://games.ventu.cc;
+   media-src 'self' https://games.ventu.cc;
+   worker-src 'self' blob: https://games.ventu.cc;
+   manifest-src 'self' https://games.ventu.cc;
+   frame-src 'self' https://games.ventu.cc https://portal.pieter.com;
+   object-src 'none';
+   base-uri 'self';
+   form-action 'self' https://games.ventu.cc;
+   upgrade-insecure-requests;
+   report-uri https://games.ventu.cc/csp-report;
+ ">
+
     <title>Piggy Run</title>
+    <meta name="description" content="Help the cute pig collect vegetables while avoiding witches and dodgy food in this cringy 3D running game!">
+    <meta name="keywords" content="piggy run, piggy, run, vegetables, witches, game, fun, 3D, running, vibejam, vibe jam, vibe jam 2025">
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://games.ventu.cc/g/piggyrun">
+    <meta property="og:title" content="Piggy Run - 3D Running Game">
+    <meta property="og:description" content="Help the cute pig collect vegetables while avoiding witches and dodgy food in this cringy 3D running game!">
+    <meta property="og:image" content="https://games.ventu.cc/g/piggyrun/piggyrun.png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:site_name" content="Ventu Games">
+
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:url" content="https://games.ventu.cc/g/piggyrun">
+    <meta name="twitter:title" content="Piggy Run - 3D Running Game">
+    <meta name="twitter:description" content="Help the cute pig collect vegetables while avoiding witches and dodgy food in this cringy 3D running game!">
+    <meta name="twitter:image" content="https://games.ventu.cc/g/piggyrun/piggyrun.png">
+
+    <!-- Additional Meta Tags -->
+    <meta name="theme-color" content="#7cba3d">
+    <meta name="mobile-web-app-capable" content="yes">
+
+    <meta name="author" content="Damian Hamill">
+    <meta name="robots" content="index, follow">
+
     <link rel="stylesheet" href="styles.css">
     <link rel="manifest" href="/manifest.json" />
-    <meta name="theme-color" content="#7cba3d" />
+
     <!-- Add iOS meta tags and icons -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black" />
     <meta name="apple-mobile-web-app-title" content="Piggy Run" />
+
     <link rel="apple-touch-icon" href="/icons/icon-192x192.png" />
+    <script src="https://unpkg.com/htmx.org@2.0.1"></script>
 </head>
 <body>
     <div id="root">  </div>
@@ -25,7 +90,24 @@
 
     <div id="game-over-screen"  >
         <h1>Game Over</h1>
+        <form class="form px-2 px-sm-2 px-lg-3" hx-post="/api/v1/game/score" hx-swap="outerHTML"  >
         <h3>Final Score: <span id="final-score">0</span></h3>
+        <h3>Share your score on the leaderboard?</h3>
+
+            <input type="text" id="username" name="username" placeholder="Username" />
+            <input type="hidden" id="user-uid" name="uid" value="" />
+            <input type="hidden" id="form-score" name="score" value="0" />
+
+            <input type="hidden" name="gameUid" value="709a7ae8-4301-450c-afed-cc32d822d7e1" />
+            <input type="hidden" name="game" value="piggyrun" />
+
+            <input type="hidden"  name="Description" value="Run as fast as you can to collect food and avoid witches and bad food." />
+            <input type="hidden"  name="url" value="https://games.ventu.cc/g/piggyrun" />
+
+            <button type="submit">Share</button>
+        </form>
+
+
         <button id="restart-button"
         style=" margin: 20px; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer;"
         onclick="location.reload()">Restart</button>
@@ -39,10 +121,10 @@
     <script type="module" src="/src/main.tsx"></script>
     <script>
       // Register service worker
-      if ('serviceWorker' in navigator) {
+      if ('serviceWorker' in navigator && false) {
         window.addEventListener('load', () => {
           navigator.serviceWorker
-            .register('/sw.js')
+            .register('./sw.js')
             .then((registration) => {
               console.log('ServiceWorker registration successful');
             })
