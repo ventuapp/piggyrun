@@ -27,7 +27,8 @@ class PiggyRun {
         this.pigdata = null;
         this.user_uid = null;
         this.geoData = null;
-
+        this.hitWitch = false;
+        this.hitBadFood = false;
         // extra params
        this.avatar_url = new URLSearchParams(window.location.search).get('avatar_url') || '';
        this.team = new URLSearchParams(window.location.search).get('team') || '';
@@ -51,6 +52,11 @@ class PiggyRun {
         this.hasMoved = false;
         this.screenCenterX = window.innerWidth / 2;
         this.screenCenterY = window.innerHeight / 2;
+
+        // Add mouse handling properties
+        this.isMouseDown = false;
+        this.mouseStartX = 0;
+        this.mouseStartY = 0;
 
         // Add GeoIP request
         this.fetchGeoIP().then(geoData => {
@@ -182,7 +188,7 @@ class PiggyRun {
                 isBad: z < -500 && Math.round(Math.random() * 100) % 6 === 0
             });
         }
-        console.log("foodScores", this.foodScores);
+        //console.log("foodScores", this.foodScores);
     }
 
     createWitch() {
@@ -195,7 +201,7 @@ class PiggyRun {
 
     playIntro() {
         if (!this.introPlayed) {
-            var audio = new Audio('./audio/piggy_run.mp3');
+            var audio = new Audio('./audio/runpiggy.mp3');
             audio.play();
             this.introPlayed = true;
         }
@@ -203,7 +209,7 @@ class PiggyRun {
 
     setupEventListeners() {
         document.addEventListener('keydown', (e) => {
-            console.log("keydown", e.key);
+            //console.log("keydown", e.key);
 
             this.playIntro();
 
@@ -234,6 +240,7 @@ class PiggyRun {
                     break;
                 case 'p':
                     this.paused = !this.paused;
+                    this.animate();
                     break;
                 case 'q':
                     this.gameover();
@@ -260,6 +267,12 @@ class PiggyRun {
             this.handleTouchEnd(e);
             this.handlePossibleTap(e);
         }, false);
+
+        // Add mouse event listeners
+        document.addEventListener('mousedown', (e) => this.handleMouseDown(e), false);
+        document.addEventListener('mousemove', (e) => this.handleMouseMove(e), false);
+        document.addEventListener('mouseup', (e) => this.handleMouseUp(e), false);
+        document.addEventListener('click', (e) => this.handleClick(e), false);
 
         // Update screen center on resize
         window.addEventListener('resize', () => {
@@ -364,8 +377,8 @@ class PiggyRun {
         const screenThirdY = window.innerHeight / 3;
 
         // Movement amounts
-        const horizontalMove = 0.5;
-        const verticalMove = 0.5;
+        const horizontalMove = 0.005;
+        const verticalMove = 0.005;
 
         // Handle horizontal movement
         if (x < screenThirdX) {
@@ -449,13 +462,32 @@ class PiggyRun {
 
     showGameMessage(message) {
         let gameMessageElement = document.getElementById('game-message');
-        if (gameMessageElement) {
-            gameMessageElement.textContent = message;
-            gameMessageElement.style.display = 'block';
+        if (!gameMessageElement) {
+            gameMessageElement = document.createElement('div');
+            gameMessageElement.id = 'game-message';
+            gameMessageElement.style.cssText = `
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                background: rgba(0, 0, 0, 0.7);
+                color: white;
+                padding: 10px 20px;
+                border-radius: 5px;
+                font-size: 18px;
+                pointer-events: none;
+                z-index: 1000;
+                display: none;
+            `;
+            document.body.appendChild(gameMessageElement);
         }
+
+        gameMessageElement.textContent = message;
+        gameMessageElement.style.display = 'block';
+
         setTimeout(() => {
             gameMessageElement.style.display = 'none';
-        }, 3000);
+        }, 2000);
     }
 
     checkCollisions() {
@@ -465,13 +497,15 @@ class PiggyRun {
                 Math.abs(this.pig.position.z - food.position.z) < 1) {
                 food.visible = false;
                 this.score += this.foodScores[index].score;
-                console.log("score", this.score);
+                //console.log("score", this.score);
 
-                if (this.foodScores[index].isBad) {
+                if (this.foodScores[index].isBad && !this.hitBadFood) {
                     this.showGameMessage("That was bad food! You vomited and lost 60% of your score!");
+                    this.hitBadFood = true;
                     this.score = Math.round(this.score * 0.4 );
-                } else if (this.foodScores[index].isWitch) {
+                } else if (this.foodScores[index].isWitch && !this.hitWitch) {
                     this.showGameMessage("A witch caught you! You lost 50% of your score!");
+                    this.hitWitch = true;
                     this.score -= Math.round(this.score / 2);
                     this.witch.position.set(food.position.x, food.position.y, food.position.z);
                     this.witch.visible = true;
@@ -480,7 +514,8 @@ class PiggyRun {
                     setTimeout(() => {
                         this.paused = false;
                         this.witch.visible = false;
-                    }, 3000);
+                        this.animate();
+                    }, 5000);
                 }
 
                 let scoreElement = document.getElementById('score-value');
@@ -579,7 +614,7 @@ class PiggyRun {
             startPortalGroup.rotation.x = 0.35;
             startPortalGroup.rotation.y = 0;
 
-            console.log("startPortalGroup", startPortalGroup);
+            //console.log("startPortalGroup", startPortalGroup);
 
             // Create portal effect
             const startPortalGeometry = new THREE.TorusGeometry(15, 2, 16, 100);
@@ -656,7 +691,7 @@ class PiggyRun {
 
                 requestAnimationFrame(animateStartPortal);
             }
-            console.log("animateStartPortal");
+            //console.log("animateStartPortal");
             animateStartPortal();
             // </create start portal>
         }
@@ -671,7 +706,7 @@ class PiggyRun {
         exitPortalGroup.rotation.x = 0.35;
         exitPortalGroup.rotation.y = 0;
 
-        console.log("exitPortalGroup", exitPortalGroup);
+        //console.log("exitPortalGroup", exitPortalGroup);
 
         // Create portal effect
         const exitPortalGeometry = new THREE.TorusGeometry(15, 2, 16, 100);
@@ -935,7 +970,7 @@ class PiggyRun {
 
     addMomentum(direction, isQuickSwipe) {
         // Reduce momentum distance
-        const momentumDistance = isQuickSwipe ? 0.75 : 0.25; // Reduced from 1.5/0.5
+        const momentumDistance = isQuickSwipe ? 0.075 : 0.025; // Reduced from 1.5/0.5
         const momentumSteps = 10;
         let step = 0;
 
@@ -958,6 +993,105 @@ class PiggyRun {
         };
 
         applyMomentum();
+    }
+
+    handleMouseDown(event) {
+        this.isMouseDown = true;
+        this.mouseStartX = event.clientX;
+        this.mouseStartY = event.clientY;
+    }
+
+    handleMouseMove(event) {
+        if (!this.isMouseDown) return;
+
+        const deltaX = event.clientX - this.mouseStartX;
+        const deltaY = event.clientY - this.mouseStartY;
+
+        // Only handle drag if it's significant
+        if (Math.abs(deltaX) > 10 || Math.abs(deltaY) > 10) {
+            if (Math.abs(deltaX) > Math.abs(deltaY)) {
+                // Horizontal movement
+                if (deltaX > 0 && this.pig.position.x < 15) {
+                    this.pig.position.x = Math.min(15, this.pig.position.x + (deltaX * 0.005));
+                } else if (deltaX < 0 && this.pig.position.x > -15) {
+                    this.pig.position.x = Math.max(-15, this.pig.position.x + (deltaX * 0.005));
+                }
+                this.camera.position.x = this.pig.position.x;
+                this.camera.lookAt(this.pig.position);
+            }
+        }
+    }
+
+    handleMouseUp(event) {
+        this.isMouseDown = false;
+    }
+
+    handleClick(event) {
+        // Show visual feedback
+        this.showClickFeedback(event.clientX, event.clientY);
+
+        // Calculate which section of the screen was clicked
+        const screenThirdX = window.innerWidth / 3;
+        const screenThirdY = window.innerHeight / 3;
+        const x = event.clientX;
+        const y = event.clientY;
+
+        // Movement amounts
+        const horizontalMove = 0.5;
+        const verticalMove = 0.5;
+
+        // Handle horizontal movement
+        if (x < screenThirdX) {
+            // Left third of screen
+            if (this.pig.position.x > -15) {
+                this.pig.position.x = Math.max(-15, this.pig.position.x - horizontalMove);
+                this.camera.position.x = this.pig.position.x;
+            }
+        } else if (x > screenThirdX * 2) {
+            // Right third of screen
+            if (this.pig.position.x < 15) {
+                this.pig.position.x = Math.min(15, this.pig.position.x + horizontalMove);
+                this.camera.position.x = this.pig.position.x;
+            }
+        }
+
+        // Handle vertical movement
+        if (y < screenThirdY) {
+            // Top third of screen - Jump
+            this.pig.position.y += verticalMove;
+        } else if (y > screenThirdY * 2 && this.pig.position.y > 0) {
+            // Bottom third of screen - Move down
+            this.pig.position.y = Math.max(0, this.pig.position.y - verticalMove);
+        }
+
+        this.camera.lookAt(this.pig.position);
+        this.showMovementIndicator(x, y);
+    }
+
+    showClickFeedback(x, y) {
+        const feedback = document.createElement('div');
+        feedback.style.cssText = `
+            position: fixed;
+            width: 20px;
+            height: 20px;
+            background: rgba(255, 255, 255, 0.7);
+            border-radius: 50%;
+            pointer-events: none;
+            transform: translate(-50%, -50%);
+            z-index: 1000;
+        `;
+        feedback.style.left = x + 'px';
+        feedback.style.top = y + 'px';
+        document.body.appendChild(feedback);
+
+        // Animate and remove
+        feedback.animate([
+            { opacity: 0.7, transform: 'translate(-50%, -50%) scale(1)' },
+            { opacity: 0, transform: 'translate(-50%, -50%) scale(2)' }
+        ], {
+            duration: 300,
+            easing: 'ease-out'
+        }).onfinish = () => feedback.remove();
     }
 }
 
